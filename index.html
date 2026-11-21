@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Casa - Instalación de agua fría y caliente</title>
 <style>
   *{box-sizing:border-box}
@@ -12,7 +13,7 @@
   button{background:#3a424c;color:#eef;border:1px solid #555;padding:6px 10px;border-radius:4px;cursor:pointer}
   button.on{background:#2f7dd1;border-color:#5aa0ee}
   #wrap{position:relative;flex:1;min-height:0}
-  canvas{position:absolute;inset:0;width:100%;height:100%;background:#f4f1ea;cursor:grab;display:block}
+  canvas{touch-action:none;position:absolute;inset:0;width:100%;height:100%;background:#f4f1ea;cursor:grab;display:block}
   #panel{position:absolute;inset:0;overflow:auto;background:#f7f4ee;color:#222;padding:18px 24px;display:none}
   #panel h2{margin:0 0 4px;font-size:18px} #panel h4{margin:18px 0 6px;font-size:14px;border-bottom:2px solid #ccc;padding-bottom:3px}
   #panel table{border-collapse:collapse;width:100%;max-width:980px;font-size:13px}
@@ -27,6 +28,16 @@
   .ok{color:#7d7}.bad{color:#f77}
   ul{margin:4px 0;padding-left:16px}
   small{color:#99a}
+  #menu{display:none}
+  @media (max-width:800px){
+    #menu{display:inline-block}
+    #side{position:absolute;z-index:20;left:0;top:0;bottom:0;width:86%;max-width:340px;transform:translateX(-102%);transition:transform .2s}
+    #side.open{transform:none;box-shadow:4px 0 16px #000a}
+    #bar button{padding:6px 8px;font-size:12px}
+    #b_mat{margin-left:0 !important}
+    #panel{padding:12px}
+    #panel table{font-size:12px}
+  }
 </style>
 </head>
 <body>
@@ -98,6 +109,8 @@ const rad = d => d * Math.PI / 180;
 Object.keys(VISTAS).forEach(n => {
   const b = document.createElement('button'); b.textContent = n; b.onclick = () => setVista(n); b.id = 'b_' + n; $('bar').appendChild(b);
 });
+const mn = document.createElement('button'); mn.textContent = '☰ Panel'; mn.id = 'menu'; mn.onclick = () => document.getElementById('side').classList.toggle('open');
+document.getElementById('bar').insertBefore(mn, document.getElementById('bar').firstChild);
 const bm = document.createElement('button'); bm.textContent = 'Materiales (qué comprar)'; bm.id = 'b_mat'; bm.style.marginLeft = 'auto';
 bm.onclick = () => { panelAbierto = !panelAbierto; bm.classList.toggle('on', panelAbierto); renderPanel(); };
 document.getElementById('bar').appendChild(bm);
@@ -105,7 +118,7 @@ let panelAbierto = false;
 function setVista(n) {
   panelAbierto = false; bm.classList.remove('on'); renderPanel();
   cur = n; const v = VISTAS[n];
-  cam.th = v.th; cam.ph = v.ph; cam.zoom = (n === '3D' ? 0.7 : 1); cam.cx = 4.7; cam.cy = 3.8; cam.cz = 3.2;
+  cam.th = v.th; cam.ph = v.ph; cam.zoom = (n === '3D' ? 0.7 : 1) * (innerWidth < 800 ? 0.72 : 1); cam.cx = 4.7; cam.cy = 3.8; cam.cz = 3.2;
   $('cOrtho').checked = !v.ortho && n === '3D' ? true : false; cam.ortho = !$('cOrtho').checked;
   document.querySelectorAll('#bar button').forEach(b => b.classList.toggle('on', b.id === 'b_' + n));
   draw();
@@ -266,16 +279,29 @@ function draw() {
 }
 
 // ---------- interacción ----------
-let drag = null;
-cv.onmousedown = e => { drag = {x: e.clientX, y: e.clientY, shift: e.shiftKey}; cv.style.cursor = 'grabbing'; };
-addEventListener('mouseup', () => { drag = null; cv.style.cursor = 'grab'; });
-addEventListener('mousemove', e => {
-  if (!drag) return;
-  const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
-  if (drag.shift) { const k = 1 / S; cam.cx -= (dx * B.r[0] - dy * B.u[0]) * k; cam.cy -= (dx * B.r[1] - dy * B.u[1]) * k; cam.cz -= (-dy * B.u[2]) * k; }
-  else { cam.th = (cam.th + dx * 0.5 + 360) % 360; cam.ph = Math.max(0, Math.min(90, cam.ph + dy * 0.5)); cur = '3D (libre)'; }
+let drag = null, pinch = null;
+const ptrs = new Map();
+function panBy(dx, dy) { const k = 1 / S; cam.cx -= (dx * B.r[0] - dy * B.u[0]) * k; cam.cy -= (dx * B.r[1] - dy * B.u[1]) * k; cam.cz -= (-dy * B.u[2]) * k; }
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY}); pinch = null; cv.style.cursor = 'grabbing';
+  if (innerWidth < 800) $('side').classList.remove('open');
+});
+cv.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (ptrs.size === 1) {
+    if (e.shiftKey || e.buttons === 2) panBy(dx, dy);
+    else { cam.th = (cam.th + dx * 0.5 + 360) % 360; cam.ph = Math.max(0, Math.min(90, cam.ph + dy * 0.5)); cur = '3D (libre)'; }
+  } else if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    if (pinch) { cam.zoom = Math.max(0.3, Math.min(6, cam.zoom * d / pinch.d)); panBy(mx - pinch.mx, my - pinch.my); }
+    pinch = {d, mx, my};
+  }
   draw();
 });
+const finPtr = e => { ptrs.delete(e.pointerId); pinch = null; if (!ptrs.size) cv.style.cursor = 'grab'; };
+cv.addEventListener('pointerup', finPtr); cv.addEventListener('pointercancel', finPtr);
+cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.onwheel = e => { e.preventDefault(); cam.zoom = Math.max(0.3, Math.min(6, cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9))); draw(); };
 ['cPB','cPA','cEq','cLab','cTr','rAF','rAC','rMZ','rRED'].forEach(i => $(i).onchange = draw);
 $('cOrtho').onchange = () => { cam.ortho = !$('cOrtho').checked; draw(); };
@@ -393,9 +419,12 @@ function renderPanel() {
 document.querySelectorAll('input[name=perfil]').forEach(r => r.onchange = () => {
   C.aplicarPerfil(r.value); refrescar(); renderPanel(); draw();
 });
+if (innerWidth < 800) $('cLab').checked = false;
 refrescar();
 setVista('3D');
 </script>
 </body>
 </html>
+
+
 
