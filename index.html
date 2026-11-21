@@ -28,9 +28,10 @@
   .ok{color:#7d7}.bad{color:#f77}
   ul{margin:4px 0;padding-left:16px}
   small{color:#99a}
-  #menu{display:none}
+  #menu,#cerrar{display:none}
   @media (max-width:800px){
     #menu{display:inline-block}
+    #cerrar{display:block;position:sticky;top:0;width:100%;margin-bottom:8px;background:#2f7dd1;z-index:2}
     #side{position:absolute;z-index:20;left:0;top:0;bottom:0;width:86%;max-width:340px;transform:translateX(-102%);transition:transform .2s}
     #side.open{transform:none;box-shadow:4px 0 16px #000a}
     #bar button{padding:6px 8px;font-size:12px}
@@ -42,6 +43,7 @@
 </head>
 <body>
 <div id="side">
+  <button id="cerrar" onclick="document.getElementById('side').classList.remove('open')">✕ Cerrar panel</button>
   <b style="font-size:15px">Instalación de agua</b><br><small>Arrastrar: rotar · Rueda: zoom · Shift+arrastrar: mover</small>
   <h3>Capas</h3>
   <label><input type="checkbox" id="cPB" checked> Planta baja (muros)</label>
@@ -301,6 +303,7 @@ cv.addEventListener('pointermove', e => {
 });
 const finPtr = e => { ptrs.delete(e.pointerId); pinch = null; if (!ptrs.size) cv.style.cursor = 'grab'; };
 cv.addEventListener('pointerup', finPtr); cv.addEventListener('pointercancel', finPtr);
+$('panel').addEventListener('pointerdown', () => { if (innerWidth < 800) $('side').classList.remove('open'); });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.onwheel = e => { e.preventDefault(); cam.zoom = Math.max(0.3, Math.min(6, cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9))); draw(); };
 ['cPB','cPA','cEq','cLab','cTr','rAF','rAC','rMZ','rRED'].forEach(i => $(i).onchange = draw);
@@ -425,6 +428,7 @@ setVista('3D');
 </script>
 </body>
 </html>
+
 
 
 
